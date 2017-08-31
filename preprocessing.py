@@ -10,14 +10,11 @@ from PIL import Image, ImageDraw
 import skimage.feature as skf
 import skimage.measure as skm
 #import cv2
+
+
 from matplotlib import pyplot as plt
 
 MAKE_DIRS = True
-PERCENT_TRAIN = .7
-
-# Image Sequence
-ImageSequence = ["T2tra", "T2sag", "ADC", "BVAL"]
-ImageSequence_ROI = ["T2ax", "T2sag", "ADC", "DWI"]
 
 # ROI size
 ROISize_T2 = (40, 40)
@@ -35,16 +32,12 @@ CSVImages = "ProstateX-2-Images-Train.csv"
 if(MAKE_DIRS):
     shutil.rmtree(ROIPath)
     os.mkdir(ROIPath)
-    os.mkdir(ROIPath+'/Train')
-    os.mkdir(ROIPath+'/Test')
 
     imageTypes = ['ADC','BVAL','t2_tse_sag','t2_tse_tra']
-    testTrain = ['Test','Train']
-    for ttName in testTrain:
-        for imageType in imageTypes:
-            os.mkdir(ROIPath+'/'+ttName+'/'+imageType)
-            for ggg in range(5):
-                os.mkdir(ROIPath+'/'+ttName+'/'+imageType+'/'+str(ggg+1))
+    for imageType in imageTypes:
+        os.mkdir(ROIPath+'/'+imageType)
+        for ggg in range(5):
+            os.mkdir(ROIPath+'/'+imageType+'/'+str(ggg+1))
 
 #load image findings into dict
 findingsDict = {}
@@ -140,40 +133,14 @@ with open(os.path.join(CSVPath, CSVImages), 'r') as CSV_images_object:
                 ggg = findingsDict[row['ProxID']][row['fid']]
 
                 #save slice
-                imagePath = os.path.join(ROIPath,'Train',imageTypeFolderName,str(ggg))
+                imagePath = os.path.join(ROIPath,imageTypeFolderName,str(ggg))
                 imageName = row['ProxID']+'_'+imageTypeFolderName+'_'+row['fid']+'_'+str(sliceNum)
                 print('Saved: '+imageName)
                 scipy.misc.imsave(os.path.join(imagePath, imageName) + ".png", slicePixels)
                 #fullScanPixels.append(slicePixels)
 
-"""
-os.mkdir(ROIPath+'/Train')
-    os.mkdir(ROIPath+'/Test')
 
-    imageTypes = ['ADC','BVAL','t2_tse_sag','t2_tse_tra']
-    testTrain = ['Test','Train']
-    for ttName in testTrain:
-        for imageType in imageTypes:
-            os.mkdir(ROIPath+'/'+ttName+'/'+imageType)
-            for ggg in range(5):
-                os.mkdir(ROIPath+'/'+ttName+'/'+imageType+'/'+str(ggg+1))
-"""
 
-print('Creating Test Set')
-#randomly move data to validation set
-for root, dirs, files in os.walk(ROIPath):
-    if(len(files)>0 and root.split('/')[2] != 'Test'):
-        random.shuffle(files)
-        splitPoint = int(round(len(files)*PERCENT_TRAIN))
-        toMove = files[splitPoint:]
-
-        #move data
-        for fileName in toMove:
-            src = root+'/'+fileName
-            dstFolders = src.split('/')
-            dstFolders[2] = 'Test'
-            dst = "/".join(dstFolders)
-            shutil.move(src,dst)
                     
 
 

@@ -4,3 +4,4 @@ authorized_keys
 SPIE-AAPM-NCI Prostate MR Gleason Grade Group Challenge results.csv
 Train
 *.h5
+*.png
