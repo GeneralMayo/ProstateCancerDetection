@@ -148,7 +148,6 @@ with open(os.path.join(CSVPath, CSVImages), 'r') as CSV_images_object:
                 print('Saved: '+imageName)
                 scipy.misc.imsave(os.path.join(imagePath, imageName) + ".png", slicePixels)
                 #fullScanPixels.append(slicePixels)
-
                     
 
 
