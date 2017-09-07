@@ -10,14 +10,11 @@ from PIL import Image, ImageDraw
 import skimage.feature as skf
 import skimage.measure as skm
 #import cv2
+
+
 from matplotlib import pyplot as plt
 
 MAKE_DIRS = True
-PERCENT_TRAIN = .7
-
-# Image Sequence
-ImageSequence = ["T2tra", "T2sag", "ADC", "BVAL"]
-ImageSequence_ROI = ["T2ax", "T2sag", "ADC", "DWI"]
 
 # ROI size
 ROISize_T2 = (40, 40)
@@ -35,16 +32,12 @@ CSVImages = "ProstateX-2-Images-Train.csv"
 if(MAKE_DIRS):
     shutil.rmtree(ROIPath)
     os.mkdir(ROIPath)
-    os.mkdir(ROIPath+'/Train')
-    os.mkdir(ROIPath+'/Test')
 
     imageTypes = ['ADC','BVAL','t2_tse_sag','t2_tse_tra']
-    testTrain = ['Test','Train']
-    for ttName in testTrain:
-        for imageType in imageTypes:
-            os.mkdir(ROIPath+'/'+ttName+'/'+imageType)
-            for ggg in range(5):
-                os.mkdir(ROIPath+'/'+ttName+'/'+imageType+'/'+str(ggg+1))
+    for imageType in imageTypes:
+        os.mkdir(ROIPath+'/'+imageType)
+        for ggg in range(5):
+            os.mkdir(ROIPath+'/'+imageType+'/'+str(ggg+1))
 
 #load image findings into dict
 findingsDict = {}
@@ -61,34 +54,44 @@ with open(os.path.join(CSVPath,CSVFindings), 'rb') as findingsCSV:
 
 
 with open(os.path.join(CSVPath, CSVImages), 'r') as CSV_images_object:
-    CSV_images_reader = csv.DictReader(CSV_images_object,lineterminator='\n')
+    CSV_images_reader = csv.DictReader(CSV_images_object, lineterminator='\n')
     i = 0
+
+
     for row in CSV_images_reader:
+
+        """
+        if(int(row['ProxID'].split('-')[1])>20):
+            continue
+        """
+
+
         #COLLECT .dcm file names
         #make file path to a particular MRI scan for a particular patient
         patientDirectory = next(os.walk(os.path.join(DicomPath,row['ProxID'])))[1][0]
         scanNumber = row['DCMSerUID']
         dicomFilesPath = os.path.join(DicomPath,row['ProxID'],patientDirectory,scanNumber)
 
-        #collect file names of .dcm files
-        lstFilesDCM = [] 
+        #collect dicom objects
+        dicomObjects = [] 
         for dirName, subdirList, fileList in os.walk(dicomFilesPath):
             for filename in fileList:
                 if ".dcm" in filename.lower():
-                    lstFilesDCM.append(os.path.join(dirName,filename))
+                    dicomObjects.append(dicom.read_file(os.path.join(dirName,filename)))
+        #sort dicom objects
+        sortedDicomObjects = sorted(dicomObjects, key=lambda x: int(len(dicomObjects)) - int(x[0x20, 0x13].value))
 
         #get reference DICOM file
-        RefDs = dicom.read_file(lstFilesDCM[0])
+        RefDs = sortedDicomObjects[0]
         #get dimentions of file
-        ConstPixelDims = (int(RefDs.Rows), int(RefDs.Columns), len(lstFilesDCM))
+        ConstPixelDims = (int(RefDs.Rows), int(RefDs.Columns), len(sortedDicomObjects))
+
         #init pixel array
         ArrayDicom = np.zeros(ConstPixelDims, dtype=RefDs.pixel_array.dtype)
         #fill pixel array
-        for filenameDCM in lstFilesDCM:
-            #read the file
-            ds = dicom.read_file(filenameDCM)
+        for (num,ds) in enumerate(sortedDicomObjects):
             #store the raw image data
-            ArrayDicom[:, :, lstFilesDCM.index(filenameDCM)] = ds.pixel_array
+            ArrayDicom[:, :, num] = ds.pixel_array
 
         #crop 3d image based on ijk and image size
         ijk = map(int,row['ijk'].split(' '))
@@ -99,7 +102,7 @@ with open(os.path.join(CSVPath, CSVImages), 'r') as CSV_images_object:
             ROISize = ROISize_ADC
         else:
             print('Unrecognized Image Type: '+imageType)
-            break
+            continue
 
         #crop slices
         fullScanPixels = []
@@ -126,7 +129,7 @@ with open(os.path.join(CSVPath, CSVImages), 'r') as CSV_images_object:
                     yFin = ConstPixelDims[1]
 
                 #save slice as png in appropriate folder
-                slicePixels = ArrayDicom[xStart:xFin,yStart:yFin,sliceNum]
+                slicePixels = ArrayDicom[yStart:yFin,xStart:xFin,sliceNum]
                 if(imageType == 't2_tse_sag' or imageType == 't2_tse_tra'):
                     imageTypeFolderName = imageType
                 elif(imageType.split('_')[-1] == 'ADC'):
@@ -140,40 +143,12 @@ with open(os.path.join(CSVPath, CSVImages), 'r') as CSV_images_object:
                 ggg = findingsDict[row['ProxID']][row['fid']]
 
                 #save slice
-                imagePath = os.path.join(ROIPath,'Train',imageTypeFolderName,str(ggg))
+                imagePath = os.path.join(ROIPath,imageTypeFolderName,str(ggg))
                 imageName = row['ProxID']+'_'+imageTypeFolderName+'_'+row['fid']+'_'+str(sliceNum)
                 print('Saved: '+imageName)
                 scipy.misc.imsave(os.path.join(imagePath, imageName) + ".png", slicePixels)
                 #fullScanPixels.append(slicePixels)
 
-"""
-os.mkdir(ROIPath+'/Train')
-    os.mkdir(ROIPath+'/Test')
-
-    imageTypes = ['ADC','BVAL','t2_tse_sag','t2_tse_tra']
-    testTrain = ['Test','Train']
-    for ttName in testTrain:
-        for imageType in imageTypes:
-            os.mkdir(ROIPath+'/'+ttName+'/'+imageType)
-            for ggg in range(5):
-                os.mkdir(ROIPath+'/'+ttName+'/'+imageType+'/'+str(ggg+1))
-"""
-
-print('Creating Test Set')
-#randomly move data to validation set
-for root, dirs, files in os.walk(ROIPath):
-    if(len(files)>0 and root.split('/')[2] != 'Test'):
-        random.shuffle(files)
-        splitPoint = int(round(len(files)*PERCENT_TRAIN))
-        toMove = files[splitPoint:]
-
-        #move data
-        for fileName in toMove:
-            src = root+'/'+fileName
-            dstFolders = src.split('/')
-            dstFolders[2] = 'Test'
-            dst = "/".join(dstFolders)
-            shutil.move(src,dst)
                     
 
 
